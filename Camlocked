@@ -1,0 +1,82 @@
+wait("0.2")
+-- Camlock Settings
+getgenv().OldAimPart = "HumanoidRootPart"
+getgenv().AimPart = "HumanoidRootPart"
+getgenv().AimlockKey = "q"
+getgenv().AimRadius = 120
+getgenv().ThirdPerson = true
+getgenv().FirstPerson = true
+getgenv().TeamCheck = false
+getgenv().PredictMovement = true
+getgenv().CheckIfJumped = true
+getgenv().Smoothness = true
+getgenv().SmoothnessAmount = 0.4
+
+-- Camlock Implementation
+local Players = game:GetService("Players")
+local Uis = game:GetService("UserInputService")
+local RService = game:GetService("RunService")
+local Client = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = Client:GetMouse()
+local Aimlock = true
+local MousePressed = false
+local AimlockTarget
+
+getgenv().WorldToViewportPoint = function(position)
+    return Camera:WorldToViewportPoint(position)
+end
+
+getgenv().GetNearestTarget = function()
+    local distances = {}
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= Client and v.Character and v.Character:FindFirstChild("Head") then
+            local distance = (v.Character.Head.Position - Camera.CFrame.Position).magnitude
+            if distance < getgenv().AimRadius then
+                table.insert(distances, {Player = v, Distance = distance})
+            end
+        end
+    end
+    table.sort(distances, function(a, b) return a.Distance < b.Distance end)
+    return distances[1] and distances[1].Player or nil
+end
+
+
+getgenv().AdjustPredictionVelocity = function()
+    local ping = Client:GetNetworkPing()
+    -- Map ping to prediction velocity
+    if ping <= 100 then
+        return 10 
+    elseif ping <= 150 then
+        return 9  
+    elseif ping <= 200 then
+        return 7.5  
+    else
+        return 6  
+    end
+end
+
+
+Mouse.KeyDown:Connect(function(key)
+    if not Uis:GetFocusedTextBox() and key == getgenv().AimlockKey then
+        MousePressed = not MousePressed
+        AimlockTarget = MousePressed and getgenv().GetNearestTarget() or nil
+    end
+end)
+
+Â¿
+RService.RenderStepped:Connect(function()
+    if getgenv().FirstPerson and Aimlock and AimlockTarget and AimlockTarget.Character then
+        local targetPart = AimlockTarget.Character:FindFirstChild(getgenv().AimPart)
+        if targetPart then
+            -- Adjust prediction velocity based on ping dynamically
+            local predictionVelocity = getgenv().AdjustPredictionVelocity()
+
+            local targetPos = targetPart.Position + targetPart.Velocity / predictionVelocity
+            local aimPosition = CFrame.new(Camera.CFrame.Position, targetPos)
+            
+            -- Smooth camera movement
+            Camera.CFrame = Camera.CFrame:Lerp(aimPosition, getgenv().SmoothnessAmount)
+        end
+    end
+end)
